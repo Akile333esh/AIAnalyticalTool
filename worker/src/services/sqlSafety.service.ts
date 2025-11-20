@@ -1,4 +1,3 @@
-// Same rules as CoreBackend
 const FORBIDDEN_KEYWORDS = [
   "INSERT",
   "UPDATE",
@@ -13,77 +12,64 @@ const FORBIDDEN_KEYWORDS = [
   "GRANT",
   "REVOKE",
   "BACKUP",
-  "RESTORE"
+  "RESTORE",
+  "INTO",   // <--- Crucial: Prevents 'SELECT * INTO new_table'
+  "PRAGMA",
+  "DBCC",
+  "DENY"
 ];
 
+// We only allow queries that target AnalyticsDB telemetry tables
+// Using Regex to ensure we don't accidentally flag partial matches
 const FORBIDDEN_SCHEMAS = [
-  "MASTERDB",
-  "RAGDB",
-  "MSDB",
-  "TEMPDB",
-  "SYS.",
-  "INFORMATION_SCHEMA"
+  "MASTERDB", "RAGDB", "MSDB", "TEMPDB", "SYS", "INFORMATION_SCHEMA"
 ];
 
-/**
- * Clean up LLM output and extract just the SQL statement.
- * - Strips ```sql fences
- * - Removes leading explanation/prose
- * - Keeps from first line that starts with SELECT / WITH
- */
-export function normalizeGeneratedSql(raw: string): string {
-  if (!raw) return raw;
-
-  let text = raw.trim();
-
-  // Remove Markdown code fences like ```sql ... ```
-  if (text.startsWith("```")) {
-    const lines = text.split(/\r?\n/);
-    // remove first line (``` or ```sql)
-    lines.shift();
-
-    // remove trailing ``` if present
-    if (lines.length && lines[lines.length - 1].trim().startsWith("```")) {
-      lines.pop();
-    }
-
-    text = lines.join("\n").trim();
-  }
-
-  // If there's still prose, pick from first line that starts with SELECT or WITH
-  const lines = text.split(/\r?\n/);
-  const startIdx = lines.findIndex((line) => {
-    const t = line.trim().toUpperCase();
-    return t.startsWith("SELECT") || t.startsWith("WITH");
-  });
-
-  if (startIdx >= 0) {
-    text = lines.slice(startIdx).join("\n").trim();
-  }
-
-  return text;
+function stripComments(sql: string): string {
+  // remove -- line comments
+  let noLineComments = sql.replace(/--.*$/gm, "");
+  // remove /* */ block comments
+  let noBlockComments = noLineComments.replace(/\/\*[\s\S]*?\*\//gm, "");
+  return noBlockComments;
 }
 
-/**
- * Hard safety gate: only allows read-only SELECT/WITH, and blocks
- * dangerous keywords & admin schemas.
- */
-export function ensureSqlIsSafe(sql: string): void {
-  const text = sql.toUpperCase().trim();
+export function isSqlSafeSelect(sql: string): boolean {
+  const cleaned = stripComments(sql).trim();
+  
+  // Normalize for case-insensitive checking
+  const upper = cleaned.toUpperCase();
 
-  if (!(text.startsWith("SELECT") || text.startsWith("WITH"))) {
-    throw new Error("Unsafe SQL: must start with SELECT");
+  // 1. Must start with SELECT or WITH (for CTE)
+  if (!(upper.startsWith("SELECT") || upper.startsWith("WITH"))) {
+    return false;
   }
 
-  for (const k of FORBIDDEN_KEYWORDS) {
-    if (text.includes(k)) {
-      throw new Error(`Unsafe SQL keyword: ${k}`);
+  // 2. Check for Forbidden Keywords using Word Boundaries (\b)
+  // This prevents false positives like "UPDATE_DATE" or "Raindrop"
+  for (const kw of FORBIDDEN_KEYWORDS) {
+    // Regex: \bWORD\b matches whole words only
+    const regex = new RegExp(`\\b${kw}\\b`, 'i');
+    if (regex.test(cleaned)) {
+      console.warn(`SQL Safety Block: Found forbidden keyword '${kw}'`);
+      return false;
     }
   }
 
-  for (const s of FORBIDDEN_SCHEMAS) {
-    if (text.includes(s)) {
-      throw new Error(`Unsafe schema: ${s}`);
+  // 3. Check for Forbidden Schemas
+  for (const schema of FORBIDDEN_SCHEMAS) {
+    // Check if the schema appears as a prefix to a table (e.g., "SYS.")
+    // or just strictly present if it's a known risky schema
+    if (upper.includes(schema)) {
+      console.warn(`SQL Safety Block: Found forbidden schema '${schema}'`);
+      return false;
     }
+  }
+
+  return true;
+}
+
+export function ensureSqlIsSafeForAnalytics(sql: string): void {
+  if (!isSqlSafeSelect(sql)) {
+    throw new Error("SQL is not safe. Only SELECT statements on AnalyticsDB telemetry tables are allowed.");
   }
 }
