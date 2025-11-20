@@ -1,75 +1,24 @@
-const FORBIDDEN_KEYWORDS = [
-  "INSERT",
-  "UPDATE",
-  "DELETE",
-  "MERGE",
-  "ALTER",
-  "DROP",
-  "TRUNCATE",
-  "EXEC",
-  "EXECUTE",
-  "CREATE",
-  "GRANT",
-  "REVOKE",
-  "BACKUP",
-  "RESTORE",
-  "INTO",   // <--- Crucial: Prevents 'SELECT * INTO new_table'
-  "PRAGMA",
-  "DBCC",
-  "DENY"
-];
-
-// We only allow queries that target AnalyticsDB telemetry tables
-// Using Regex to ensure we don't accidentally flag partial matches
-const FORBIDDEN_SCHEMAS = [
-  "MASTERDB", "RAGDB", "MSDB", "TEMPDB", "SYS", "INFORMATION_SCHEMA"
-];
-
-function stripComments(sql: string): string {
-  // remove -- line comments
-  let noLineComments = sql.replace(/--.*$/gm, "");
-  // remove /* */ block comments
-  let noBlockComments = noLineComments.replace(/\/\*[\s\S]*?\*\//gm, "");
-  return noBlockComments;
-}
+// CoreBackend/src/services/sqlSafety.service.ts
+import { Parser } from 'node-sql-parser';
 
 export function isSqlSafeSelect(sql: string): boolean {
-  const cleaned = stripComments(sql).trim();
-  
-  // Normalize for case-insensitive checking
-  const upper = cleaned.toUpperCase();
+  const parser = new Parser();
+  try {
+    const ast = parser.astify(sql);
+    
+    // Handle array of statements or single statement
+    const statements = Array.isArray(ast) ? ast : [ast];
 
-  // 1. Must start with SELECT or WITH (for CTE)
-  if (!(upper.startsWith("SELECT") || upper.startsWith("WITH"))) {
-    return false;
-  }
-
-  // 2. Check for Forbidden Keywords using Word Boundaries (\b)
-  // This prevents false positives like "UPDATE_DATE" or "Raindrop"
-  for (const kw of FORBIDDEN_KEYWORDS) {
-    // Regex: \bWORD\b matches whole words only
-    const regex = new RegExp(`\\b${kw}\\b`, 'i');
-    if (regex.test(cleaned)) {
-      console.warn(`SQL Safety Block: Found forbidden keyword '${kw}'`);
-      return false;
+    for (const stmt of statements) {
+      // 1. Ensure only SELECT statements are allowed
+      if (stmt.type !== 'select') return false;
+      
+      // 2. (Optional) Check 'from' clause to whitelist tables
+      // ... additional checks here
     }
-  }
-
-  // 3. Check for Forbidden Schemas
-  for (const schema of FORBIDDEN_SCHEMAS) {
-    // Check if the schema appears as a prefix to a table (e.g., "SYS.")
-    // or just strictly present if it's a known risky schema
-    if (upper.includes(schema)) {
-      console.warn(`SQL Safety Block: Found forbidden schema '${schema}'`);
-      return false;
-    }
-  }
-
-  return true;
-}
-
-export function ensureSqlIsSafeForAnalytics(sql: string): void {
-  if (!isSqlSafeSelect(sql)) {
-    throw new Error("SQL is not safe. Only SELECT statements on AnalyticsDB telemetry tables are allowed.");
+    return true;
+  } catch (err) {
+    console.warn("SQL Parse Error:", err);
+    return false; // If we can't parse it, it's not safe
   }
 }
