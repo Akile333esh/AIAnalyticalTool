@@ -13,21 +13,29 @@ export interface JobEvent {
   message?: string;
   progress?: number;
   etaSeconds?: number;
-  sqlQuery?: string;
+  sqlQuery?: string;       // ✅ Needed to capture SQL for saving
   sqlExplanation?: string;
   rows?: any[];
   error?: string;
 }
 
 export interface DashboardWidget {
-  id: string; // Now corresponds to SavedWidgets.Id (as string)
+  id: string;
   title: string;
   type: "kpi" | "timeseries" | "table" | "bar" | "chart";
-  colSpan?: number; // 1, 2, or 3
+  colSpan?: number;        // ✅ Added for grid resizing (1, 2, or 3)
 }
 
 export interface DashboardLayout {
   id?: number;
   name?: string;
   widgets: DashboardWidget[];
+  CreatedAt?: string;
+}
+
+export interface SavedWidget {
+  id: number;
+  name: string;
+  type: string;
+  sqlQuery: string;
 }
