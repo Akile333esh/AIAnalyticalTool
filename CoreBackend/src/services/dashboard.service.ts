@@ -2,115 +2,123 @@ import sql from "mssql";
 import { getMasterPool } from "../db/masterDb";
 import { getAnalyticsPool } from "../db/analyticsDb";
 
-export async function getDashboardLayout(userId: number) {
-  const pool = await getMasterPool();
+// --- MULTI-DASHBOARD CRUD ---
 
+export async function getAllDashboards(userId: number) {
+  const pool = await getMasterPool();
   const result = await pool.request()
     .input("UserId", sql.Int, userId)
-    .query(`
-      SELECT TOP 1 *
-      FROM Dashboards
-      WHERE UserId = @UserId
-      ORDER BY CreatedAt ASC
-    `);
+    .query(`SELECT Id, Name, CreatedAt FROM Dashboards WHERE UserId = @UserId ORDER BY CreatedAt DESC`);
+  return result.recordset;
+}
 
+export async function getDashboardById(userId: number, dashboardId: number) {
+  const pool = await getMasterPool();
+  const result = await pool.request()
+    .input("UserId", sql.Int, userId)
+    .input("Id", sql.Int, dashboardId)
+    .query(`SELECT * FROM Dashboards WHERE UserId = @UserId AND Id = @Id`);
+  
   const row = result.recordset[0];
-  if (!row) {
-    // no layout yet
-    return {
-      Id: null,
-      LayoutJson: JSON.stringify({ widgets: [] })
-    };
-  }
+  if (!row) return null;
 
   return {
-    Id: row.Id,
-    LayoutJson: row.LayoutJson as string
+    ...row,
+    widgets: JSON.parse(row.LayoutJson || '{"widgets":[]}').widgets
   };
 }
 
-export async function saveDashboardLayout(userId: number, layout: any) {
-  const layoutJson = JSON.stringify(layout);
+export async function createDashboard(userId: number, name: string, layout: any) {
   const pool = await getMasterPool();
-
-  const existing = await pool.request()
+  const layoutJson = JSON.stringify(layout);
+  
+  const result = await pool.request()
     .input("UserId", sql.Int, userId)
+    .input("Name", sql.NVarChar, name)
+    .input("LayoutJson", sql.NVarChar, layoutJson)
     .query(`
-      SELECT TOP 1 Id
-      FROM Dashboards
-      WHERE UserId = @UserId
-      ORDER BY CreatedAt ASC
+      INSERT INTO Dashboards (UserId, Name, LayoutJson)
+      OUTPUT INSERTED.Id
+      VALUES (@UserId, @Name, @LayoutJson)
     `);
-
-  if (existing.recordset.length > 0) {
-    const id = existing.recordset[0].Id as number;
-    await pool.request()
-      .input("Id", sql.Int, id)
-      .input("LayoutJson", sql.NVarChar, layoutJson)
-      .query(`
-        UPDATE Dashboards
-        SET LayoutJson = @LayoutJson, UpdatedAt = SYSUTCDATETIME()
-        WHERE Id = @Id
-      `);
-  } else {
-    await pool.request()
-      .input("UserId", sql.Int, userId)
-      .input("Name", sql.NVarChar, "Default Capacity Overview")
-      .input("LayoutJson", sql.NVarChar, layoutJson)
-      .query(`
-        INSERT INTO Dashboards (UserId, Name, LayoutJson)
-        VALUES (@UserId, @Name, @LayoutJson)
-      `);
-  }
+  
+  return result.recordset[0].Id;
 }
 
-// Simple widget data based on widget id (you can refine later)
+export async function updateDashboard(userId: number, dashboardId: number, layout: any) {
+  const pool = await getMasterPool();
+  const layoutJson = JSON.stringify(layout);
+  
+  await pool.request()
+    .input("UserId", sql.Int, userId)
+    .input("Id", sql.Int, dashboardId)
+    .input("LayoutJson", sql.NVarChar, layoutJson)
+    .query(`
+      UPDATE Dashboards
+      SET LayoutJson = @LayoutJson, UpdatedAt = SYSUTCDATETIME()
+      WHERE Id = @Id AND UserId = @UserId
+    `);
+}
+
+// --- WIDGET MANAGEMENT (Real App Implementation) ---
+
+/**
+ * Saves a generated SQL query as a reusable widget.
+ * Called when the user clicks "Save to Dashboard".
+ */
+export async function createSavedWidget(userId: number, name: string, type: string, sqlQuery: string) {
+  const pool = await getMasterPool();
+  
+  const result = await pool.request()
+    .input("UserId", sql.Int, userId)
+    .input("Name", sql.NVarChar, name)
+    .input("Type", sql.NVarChar, type)
+    .input("SqlQuery", sql.NVarChar, sqlQuery)
+    .query(`
+      INSERT INTO SavedWidgets (UserId, Name, Type, SqlQuery)
+      OUTPUT INSERTED.Id
+      VALUES (@UserId, @Name, @Type, @SqlQuery)
+    `);
+
+  return result.recordset[0].Id;
+}
+
+// --- WIDGET DATA EXECUTION ---
+
 export async function getWidgetData(userId: number, widgetId: string) {
-  // For now, userId is not used in query, but could be used for scoping later
-  const pool = await getAnalyticsPool();
+  // 1. Identify the Widget ID
+  // In a real app, widgetId should be the primary key from 'SavedWidgets'
+  const dbWidgetId = parseInt(widgetId, 10);
 
-  if (widgetId === "cpu_30d") {
-    const result = await pool.request().query(`
-      SELECT
-        DeviceName,
-        CAST(DataCollectionDate AS DATE) AS BucketDate,
-        AVG(DataValue) AS AvgCpu
-      FROM AnalyticsDB.dbo.CpuPerformance
-      WHERE DataCollectionDate >= DATEADD(DAY, -30, SYSUTCDATETIME())
-      GROUP BY DeviceName, CAST(DataCollectionDate AS DATE)
-      ORDER BY BucketDate, DeviceName;
-    `);
-    return result.recordset;
+  if (isNaN(dbWidgetId)) {
+    // Handle legacy hardcoded widgets if necessary, or throw error
+    console.warn(`Invalid or legacy widget ID requested: ${widgetId}`);
+    return []; 
   }
 
-  if (widgetId === "memory_30d") {
-    const result = await pool.request().query(`
-      SELECT
-        DeviceName,
-        CAST(DataCollectionDate AS DATE) AS BucketDate,
-        AVG(DataValue) AS AvgMemory
-      FROM AnalyticsDB.dbo.MemoryPerformance
-      WHERE DataCollectionDate >= DATEADD(DAY, -30, SYSUTCDATETIME())
-      GROUP BY DeviceName, CAST(DataCollectionDate AS DATE)
-      ORDER BY BucketDate, DeviceName;
-    `);
-    return result.recordset;
+  // 2. Fetch the SQL definition from Master DB
+  const masterPool = await getMasterPool();
+  const widgetDef = await masterPool.request()
+    .input("Id", sql.Int, dbWidgetId)
+    .input("UserId", sql.Int, userId) // Security: Ensure user owns the widget
+    .query(`SELECT SqlQuery FROM SavedWidgets WHERE Id = @Id AND UserId = @UserId`);
+
+  const row = widgetDef.recordset[0];
+  if (!row) {
+    throw new Error(`Widget #${widgetId} not found or access denied.`);
   }
 
-  if (widgetId === "disk_usage") {
-    const result = await pool.request().query(`
-      SELECT
-        DeviceName,
-        Instance,
-        AVG(DataValue) AS AvgDiskUtilization
-      FROM AnalyticsDB.dbo.DiskPerformance
-      WHERE DataCollectionDate >= DATEADD(DAY, -7, SYSUTCDATETIME())
-      GROUP BY DeviceName, Instance
-      ORDER BY AvgDiskUtilization DESC;
-    `);
-    return result.recordset;
-  }
+  const sqlQuery = row.SqlQuery;
 
-  // default: nothing known
-  return [];
+  // 3. Execute the SQL against the Analytics DB
+  const analyticsPool = await getAnalyticsPool();
+  
+  try {
+    // NOTE: In production, ensure the DB user for analyticsPool has READ-ONLY permissions
+    const result = await analyticsPool.request().query(sqlQuery);
+    return result.recordset;
+  } catch (err: any) {
+    console.error(`Failed to execute widget ${widgetId} query:`, err);
+    throw new Error("Failed to retrieve widget data.");
+  }
 }
