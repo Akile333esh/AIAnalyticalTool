@@ -27,5 +27,8 @@ export const config = {
   REDIS_HOST: process.env.REDIS_HOST || "localhost",
   REDIS_PORT: parseInt(process.env.REDIS_PORT || "6379", 10),
 
-  AI_BACKEND_URL: process.env.AI_BACKEND_URL || "http://localhost:8001"
+  AI_BACKEND_URL: process.env.AI_BACKEND_URL || "http://localhost:8001",
+  
+  // 👇 Added: Default to localhost:3000 for local dev
+  CORS_ORIGIN: process.env.CORS_ORIGIN || "http://localhost:3000"
 } as const;
