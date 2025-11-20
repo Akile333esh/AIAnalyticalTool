@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+import json
 import textwrap
 from typing import List
 
@@ -65,7 +65,7 @@ async def generate_sql(request: SQLGenRequest) -> str:
 
     filter_block = ""
     if request.filters:
-        filter_block = f"Structured filters (hint, optional): {request.filters!r}"
+        filter_block = f"Structured filters: {json.dumps(request.filters)}"
 
     time_block = ""
     if request.time_range:
@@ -124,3 +124,4 @@ async def generate_sql(request: SQLGenRequest) -> str:
         sql = sql.replace("sql", "", 1).strip()
 
     return sql
+
