@@ -12,12 +12,16 @@ import { errorHandler } from "./middleware/errorHandler";
 import { rateLimiter } from "./middleware/rateLimiter";
 import { metricsMiddleware, metricsHandler } from "./utils/metrics";
 import { setupSwagger } from "./utils/swagger";
+import { config } from "./config/env"; // 👈 Import config
 
 const app = express();
 
+// 👇 SECURED: Only allow requests from the configured frontend URL
 app.use(cors({
-    origin: true,
-    credentials: true
+    origin: config.CORS_ORIGIN,
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"]
 }));
 
 app.use(express.json());
