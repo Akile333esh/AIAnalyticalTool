@@ -38,3 +38,17 @@ export async function createJob(
     jobToken
   };
 }
+
+export async function cancelJob(jobId: string) {
+  const job = await jobQueue.getJob(jobId);
+  if (job) {
+    // Attempt to remove from queue (stops it if waiting)
+    await job.remove();
+    // Note: If the worker is already executing the LLM call, 
+    // this won't stop the Python thread immediately, 
+    // but it prevents the job from completing successfully in the queue.
+    return true;
+  }
+  return false;
+}
+
