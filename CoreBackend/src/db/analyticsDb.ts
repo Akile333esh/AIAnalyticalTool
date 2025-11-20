@@ -2,29 +2,36 @@ import sql, { ConnectionPool, config as SqlConfig } from "mssql";
 import { config } from "../config/env";
 import { logger } from "../utils/logger";
 
-let analyticsPool: ConnectionPool | null = null;
-
 const analyticsDbConfig: SqlConfig = {
   user: config.ANALYTICS_DB_USER,
   password: config.ANALYTICS_DB_PASSWORD,
   server: config.ANALYTICS_DB_HOST,
   database: config.ANALYTICS_DB_NAME,
   options: {
-    encrypt: false,
-    trustServerCertificate: true
+    encrypt: config.ANALYTICS_DB_HOST !== 'localhost', // Auto-enable encryption if not local
+    trustServerCertificate: true 
   }
 };
 
+// Store the pending promise, not just the pool
+let poolPromise: Promise<ConnectionPool> | null = null;
+
 export async function getAnalyticsPool(): Promise<ConnectionPool> {
-  if (analyticsPool && analyticsPool.connected) {
-    return analyticsPool;
+  if (poolPromise) {
+    return poolPromise;
   }
 
-  if (analyticsPool && !analyticsPool.connected) {
-    await analyticsPool.close();
-  }
+  poolPromise = new sql.ConnectionPool(analyticsDbConfig)
+    .connect()
+    .then((pool) => {
+      logger.info("Connected to AnalyticsDB");
+      return pool;
+    })
+    .catch((err) => {
+      logger.error("Database Connection Failed! ", err);
+      poolPromise = null; // Reset so we can try again
+      throw err;
+    });
 
-  analyticsPool = await new sql.ConnectionPool(analyticsDbConfig).connect();
-  logger.info("Connected to AnalyticsDB");
-  return analyticsPool;
+  return poolPromise;
 }
