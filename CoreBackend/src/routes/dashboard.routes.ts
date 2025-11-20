@@ -2,57 +2,72 @@ import { Router } from "express";
 import asyncHandler from "express-async-handler";
 import { authRequired } from "../middleware/authRequired";
 import {
-  getDashboardLayout,
-  saveDashboardLayout,
+  getAllDashboards,
+  getDashboardById,
+  createDashboard,
+  updateDashboard,
   getWidgetData,
+  createSavedWidget // <--- Import this
 } from "../services/dashboard.service";
 import { StatusCodes } from "http-status-codes";
 
 const router = Router();
 
-// All dashboard routes require auth
 router.use(authRequired);
 
-// GET /frontend/dashboard/layout
-router.get(
-  "/layout",
-  asyncHandler(async (req, res) => {
-    const user = (req as any).user;
-    const layoutRow = await getDashboardLayout(user.userId);
+// --- DASHBOARDS ---
 
-    let parsed: any;
-    try {
-      parsed = JSON.parse(layoutRow.LayoutJson);
-    } catch {
-      parsed = layoutRow.LayoutJson;
-    }
+router.get("/list", asyncHandler(async (req, res) => {
+  const user = (req as any).user;
+  const dashboards = await getAllDashboards(user.userId);
+  res.json(dashboards);
+}));
 
-    res.json({
-      layout: parsed,
-    });
-  })
-);
+router.get("/:id", asyncHandler(async (req, res) => {
+  const user = (req as any).user;
+  const dashboard = await getDashboardById(user.userId, Number(req.params.id));
+  if (!dashboard) {
+    res.status(404).json({ message: "Dashboard not found" });
+    return;
+  }
+  res.json(dashboard);
+}));
 
-// POST /frontend/dashboard/layout
-router.post(
-  "/layout",
-  asyncHandler(async (req, res) => {
-    const user = (req as any).user;
-    const layout = req.body.layout;
-    await saveDashboardLayout(user.userId, layout);
-    res.status(StatusCodes.OK).json({ message: "Layout saved" });
-  })
-);
+router.post("/", asyncHandler(async (req, res) => {
+  const user = (req as any).user;
+  const { name, layout } = req.body;
+  const id = await createDashboard(user.userId, name || "New Dashboard", layout || { widgets: [] });
+  res.json({ id, message: "Created" });
+}));
 
-// GET /frontend/dashboard/widget/:id/data
-router.get(
-  "/widget/:id/data",
-  asyncHandler(async (req, res) => {
-    const user = (req as any).user;
-    const widgetId = req.params.id;
-    const data = await getWidgetData(user.userId, widgetId);
-    res.json({ widgetId, data });
-  })
-);
+router.put("/:id", asyncHandler(async (req, res) => {
+  const user = (req as any).user;
+  const { layout } = req.body;
+  await updateDashboard(user.userId, Number(req.params.id), layout);
+  res.json({ message: "Updated" });
+}));
+
+// --- WIDGETS ---
+
+// POST /frontend/dashboard/widget -> Save a new widget (SQL) to DB
+router.post("/widget", asyncHandler(async (req, res) => {
+  const user = (req as any).user;
+  const { name, type, sqlQuery } = req.body;
+  
+  if (!name || !sqlQuery) {
+    res.status(400).json({ message: "Name and SqlQuery are required" });
+    return;
+  }
+
+  const widgetId = await createSavedWidget(user.userId, name, type || 'table', sqlQuery);
+  res.json({ widgetId, message: "Widget saved" });
+}));
+
+// GET /frontend/dashboard/widget/:id/data -> Execute saved SQL
+router.get("/widget/:id/data", asyncHandler(async (req, res) => {
+  const user = (req as any).user;
+  const data = await getWidgetData(user.userId, req.params.id);
+  res.json({ data });
+}));
 
 export default router;
