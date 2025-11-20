@@ -41,9 +41,13 @@ export const config = {
   // CORS (Added from previous step)
   CORS_ORIGIN: getEnv("CORS_ORIGIN", "http://localhost:3000"),
 
+  // 👇 NEW: Define who gets to be the admin
+  ADMIN_EMAIL: getEnv("ADMIN_EMAIL", ""), // Defaults to empty (no admins allowed by default)
+
   // Infrastructure
   REDIS_HOST: getEnv("REDIS_HOST", "localhost"),
   REDIS_PORT: parseInt(getEnv("REDIS_PORT", "6379"), 10),
 
   AI_BACKEND_URL: getEnv("AI_BACKEND_URL", "http://localhost:8001")
 } as const;
+
