@@ -2,29 +2,40 @@ import sql, { ConnectionPool, config as SqlConfig } from "mssql";
 import { config } from "../config/env";
 import { logger } from "../utils/logger";
 
-let masterPool: ConnectionPool | null = null;
-
 const masterDbConfig: SqlConfig = {
   user: config.MASTER_DB_USER,
   password: config.MASTER_DB_PASSWORD,
   server: config.MASTER_DB_HOST,
   database: config.MASTER_DB_NAME,
   options: {
-    encrypt: false,              // for local/dev; set true with proper certs in prod
-    trustServerCertificate: true // allow self-signed certs in dev
+    encrypt: config.MASTER_DB_HOST !== 'localhost',
+    trustServerCertificate: true
+  },
+  pool: {
+    max: 10,
+    min: 0,
+    idleTimeoutMillis: 30000
   }
 };
 
+let poolPromise: Promise<ConnectionPool> | null = null;
+
 export async function getMasterPool(): Promise<ConnectionPool> {
-  if (masterPool && masterPool.connected) {
-    return masterPool;
+  if (poolPromise) {
+    return poolPromise;
   }
 
-  if (masterPool && !masterPool.connected) {
-    await masterPool.close();
-  }
+  poolPromise = new sql.ConnectionPool(masterDbConfig)
+    .connect()
+    .then((pool) => {
+      logger.info("Connected to MasterDB");
+      return pool;
+    })
+    .catch((err) => {
+      logger.error("❌ Database Connection Failed (MasterDB): ", err);
+      poolPromise = null;
+      throw err;
+    });
 
-  masterPool = await new sql.ConnectionPool(masterDbConfig).connect();
-  logger.info("Connected to MasterDB");
-  return masterPool;
+  return poolPromise;
 }
