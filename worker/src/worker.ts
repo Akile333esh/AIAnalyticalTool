@@ -22,8 +22,7 @@ async function startWorker() {
       },
       { 
         connection: redisConnection,
-        // Optional: Concurrency setting
-        // concurrency: 5 
+        concurrency: 10
       }
     );
 
@@ -52,3 +51,4 @@ async function startWorker() {
 
 // Execute the startup function
 startWorker();
+
