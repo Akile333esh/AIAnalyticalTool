@@ -2,7 +2,7 @@ from __future__ import annotations
 import json
 import textwrap
 from typing import List
-
+from httpx import ConnectError, TimeoutException
 from app.core.config import config
 from app.core.ollama_client import ollama_client
 from app.models.schemas import SQLGenRequest, RAGMetadata
@@ -113,7 +113,11 @@ async def generate_sql(request: SQLGenRequest) -> str:
 
     prompt = system_instructions + "\n\n---\n\n" + user_block
 
-    raw = await ollama_client.generate(model=config.SQL_MODEL, prompt=prompt)
+    try:
+        raw = await ollama_client.generate(model=config.SQL_MODEL, prompt=prompt)
+    except (ConnectError, TimeoutException):
+        # Return a fallback or specific error message that CoreBackend can parse
+        raise Exception("AI Service Unavailable: Could not connect to Ollama")
 
     # Post-process to strip possible accidental fences/backticks
     sql = raw.strip()
@@ -124,4 +128,5 @@ async def generate_sql(request: SQLGenRequest) -> str:
         sql = sql.replace("sql", "", 1).strip()
 
     return sql
+
 
