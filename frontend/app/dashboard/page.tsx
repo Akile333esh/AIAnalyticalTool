@@ -6,7 +6,8 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
 import { apiFetch } from "@/lib/apiClient";
 import { Button } from "@/components/ui/Button";
-import { DashboardGrid } from "@/components/dashboard/DashboardGrid";
+import { WidgetCard } from "@/components/dashboard/WidgetCard";
+import { DashboardWidgetRenderer } from "@/components/dashboard/DashboardWidgetRenderer";
 import type { DashboardLayout } from "@/lib/types";
 
 export default function DashboardPage() {
@@ -77,13 +78,14 @@ export default function DashboardPage() {
     }
   };
 
-  // 5. Handle resizing widgets (Simple toggle for demo: 1 -> 2 -> 3 -> 1 cols)
+  // 5. Handle resizing widgets (Simple toggle: 1 -> 2 -> 3 -> 1 cols)
   const toggleWidgetSize = (widgetId: string) => {
     if (!activeDashboard) return;
     
     const updatedWidgets = activeDashboard.widgets.map(w => {
       if (w.id === widgetId) {
         const currentSpan = w.colSpan || 1;
+        // Toggle between 1, 2, and 3 columns
         return { ...w, colSpan: currentSpan >= 3 ? 1 : currentSpan + 1 };
       }
       return w;
@@ -168,55 +170,45 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                {/* We reuse the DashboardGrid component, but we need to pass the 
-                    resize handler if we are in edit mode. 
-                    
-                    Since the standard DashboardGrid component might not accept a 'onResize' prop 
-                    depending on your implementation, you can wrap it here or 
-                    modify DashboardGrid.tsx to accept children or render props.
-                    
-                    For this example, we'll modify how we render it slightly:
-                */}
-                
                 <div className="relative">
                   {isEditing && (
-                    <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-blue-600/90 text-white text-xs px-3 py-1 rounded-full z-10 animate-bounce">
+                    <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-blue-600/90 text-white text-xs px-3 py-1 rounded-full z-10 animate-bounce shadow-lg">
                       Edit Mode Active: Click "Resize" on widgets to change their width.
                     </div>
                   )}
                   
-                  {/* If you want resizing controls, we can map manually here 
-                      OR update DashboardGrid.tsx to accept an 'isEditing' prop.
-                      Let's map manually here for maximum flexibility.
-                   */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pb-10">
                     {activeDashboard.widgets.map((w) => (
                       <div 
                         key={w.id} 
-                        className={`relative transition-all duration-300 ${
+                        className={`flex flex-col transition-all duration-300 ${
                           w.colSpan === 2 ? "md:col-span-2" : w.colSpan === 3 ? "md:col-span-3" : ""
                         }`}
                       >
-                        {/* Import the WidgetCard & GenericWidget logic from DashboardGrid.tsx essentially */}
-                        <DashboardGrid widgets={[w]} /> 
-                        
-                        {isEditing && (
-                          <div className="absolute top-3 right-3 z-20">
-                            <button 
-                              onClick={() => toggleWidgetSize(w.id)}
-                              className="bg-slate-800 hover:bg-slate-700 text-white text-[10px] px-2 py-1 rounded border border-slate-600 shadow-lg"
-                            >
-                              Resize ({w.colSpan || 1}x)
-                            </button>
-                          </div>
-                        )}
+                        <div className="relative h-full">
+                          <WidgetCard title={w.title}>
+                            {/* The renderer handles fetching data by ID */}
+                            <DashboardWidgetRenderer widget={w} />
+                          </WidgetCard>
+                          
+                          {isEditing && (
+                            <div className="absolute top-2 right-2 z-20">
+                              <button 
+                                onClick={() => toggleWidgetSize(w.id)}
+                                className="bg-slate-800 hover:bg-slate-700 text-white text-[10px] px-2 py-1 rounded border border-slate-600 shadow-lg backdrop-blur-sm"
+                              >
+                                Resize ({w.colSpan || 1}x)
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     ))}
                     
                     {activeDashboard.widgets.length === 0 && (
-                      <div className="col-span-full text-center py-20 text-slate-500 border-2 border-dashed border-slate-800 rounded-xl">
+                      <div className="col-span-full text-center py-20 text-slate-500 border-2 border-dashed border-slate-800 rounded-xl bg-slate-900/20">
                         This dashboard is empty. <br/> 
-                        Go to the <a href="/" className="text-brand hover:underline">Workspace</a> to generate and save widgets.
+                        Go to the <a href="/" className="text-brand hover:underline font-semibold">Workspace</a> to generate and save widgets.
                       </div>
                     )}
                   </div>
