@@ -13,14 +13,17 @@ interface UserRecord {
 }
 
 export async function registerUser(email: string, password: string): Promise<UserRecord> {
-  if (!email.includes("@")) {
+  // 1. Basic Validation
+  if (!email || !email.includes("@")) {
     throw new Error("Invalid email address");
   }
-  if (password.length < 8) {
+  if (!password || password.length < 8) {
     throw new Error("Password must be at least 8 characters long");
   }
+
   const pool = await getMasterPool();
 
+  // 2. Check if user already exists
   const existing = await pool.request()
     .input("Email", sql.NVarChar, email)
     .query("SELECT TOP 1 * FROM Users WHERE Email = @Email");
@@ -31,10 +34,16 @@ export async function registerUser(email: string, password: string): Promise<Use
 
   const hash = await bcrypt.hash(password, 10);
 
+  // 3. Determine Role based on Config
+  // If the registering email matches the ADMIN_EMAIL env var, they are an Admin.
+  const role = (config.ADMIN_EMAIL && email.toLowerCase() === config.ADMIN_EMAIL.toLowerCase()) 
+    ? "admin" 
+    : "user";
+
   const result = await pool.request()
     .input("Email", sql.NVarChar, email)
     .input("PasswordHash", sql.NVarChar, hash)
-    .input("Role", sql.NVarChar, "user")
+    .input("Role", sql.NVarChar, role) // 👈 Dynamic role
     .query(`
       INSERT INTO Users (Email, PasswordHash, Role)
       OUTPUT INSERTED.*
@@ -117,4 +126,3 @@ export async function logout(refreshToken: string) {
       WHERE Token = @Token
     `);
 }
-
