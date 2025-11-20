@@ -2,33 +2,48 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+/**
+ * Helper function to enforce required environment variables.
+ * Throws an error if the variable is missing and no default is provided.
+ */
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key] || defaultValue;
+  if (value === undefined) {
+    throw new Error(`❌ Critical Error: Missing required environment variable '${key}'`);
+  }
+  return value;
+}
+
 export const config = {
-  PORT: parseInt(process.env.PORT || "4000", 10),
+  PORT: parseInt(getEnv("PORT", "4000"), 10),
 
-  MASTER_DB_HOST: process.env.MASTER_DB_HOST!,
-  MASTER_DB_USER: process.env.MASTER_DB_USER!,
-  MASTER_DB_PASSWORD: process.env.MASTER_DB_PASSWORD!,
-  MASTER_DB_NAME: process.env.MASTER_DB_NAME!,
+  // Database Configs - No defaults allowed for security
+  MASTER_DB_HOST: getEnv("MASTER_DB_HOST"),
+  MASTER_DB_USER: getEnv("MASTER_DB_USER"),
+  MASTER_DB_PASSWORD: getEnv("MASTER_DB_PASSWORD"),
+  MASTER_DB_NAME: getEnv("MASTER_DB_NAME"),
 
-  ANALYTICS_DB_HOST: process.env.ANALYTICS_DB_HOST!,
-  ANALYTICS_DB_USER: process.env.ANALYTICS_DB_USER!,
-  ANALYTICS_DB_PASSWORD: process.env.ANALYTICS_DB_PASSWORD!,
-  ANALYTICS_DB_NAME: process.env.ANALYTICS_DB_NAME!,
+  ANALYTICS_DB_HOST: getEnv("ANALYTICS_DB_HOST"),
+  ANALYTICS_DB_USER: getEnv("ANALYTICS_DB_USER"),
+  ANALYTICS_DB_PASSWORD: getEnv("ANALYTICS_DB_PASSWORD"),
+  ANALYTICS_DB_NAME: getEnv("ANALYTICS_DB_NAME"),
 
-  RAG_DB_HOST: process.env.RAG_DB_HOST!,
-  RAG_DB_USER: process.env.RAG_DB_USER!,
-  RAG_DB_PASSWORD: process.env.RAG_DB_PASSWORD!,
-  RAG_DB_NAME: process.env.RAG_DB_NAME!,
+  RAG_DB_HOST: getEnv("RAG_DB_HOST"),
+  RAG_DB_USER: getEnv("RAG_DB_USER"),
+  RAG_DB_PASSWORD: getEnv("RAG_DB_PASSWORD"),
+  RAG_DB_NAME: getEnv("RAG_DB_NAME"),
 
-  JWT_SECRET: process.env.JWT_SECRET!,
-  JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || "15m",
-  REFRESH_TOKEN_EXPIRES_IN: process.env.REFRESH_TOKEN_EXPIRES_IN || "7d",
-
-  REDIS_HOST: process.env.REDIS_HOST || "localhost",
-  REDIS_PORT: parseInt(process.env.REDIS_PORT || "6379", 10),
-
-  AI_BACKEND_URL: process.env.AI_BACKEND_URL || "http://localhost:8001",
+  // Security
+  JWT_SECRET: getEnv("JWT_SECRET"),
+  JWT_EXPIRES_IN: getEnv("JWT_EXPIRES_IN", "15m"),
+  REFRESH_TOKEN_EXPIRES_IN: getEnv("REFRESH_TOKEN_EXPIRES_IN", "7d"),
   
-  // 👇 Added: Default to localhost:3000 for local dev
-  CORS_ORIGIN: process.env.CORS_ORIGIN || "http://localhost:3000"
+  // CORS (Added from previous step)
+  CORS_ORIGIN: getEnv("CORS_ORIGIN", "http://localhost:3000"),
+
+  // Infrastructure
+  REDIS_HOST: getEnv("REDIS_HOST", "localhost"),
+  REDIS_PORT: parseInt(getEnv("REDIS_PORT", "6379"), 10),
+
+  AI_BACKEND_URL: getEnv("AI_BACKEND_URL", "http://localhost:8001")
 } as const;
