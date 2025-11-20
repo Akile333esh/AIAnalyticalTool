@@ -8,12 +8,17 @@ const analyticsDbConfig: SqlConfig = {
   server: config.ANALYTICS_DB_HOST,
   database: config.ANALYTICS_DB_NAME,
   options: {
-    encrypt: config.ANALYTICS_DB_HOST !== 'localhost', // Auto-enable encryption if not local
-    trustServerCertificate: true 
+    encrypt: config.ANALYTICS_DB_HOST !== 'localhost', // Good practice: Encrypt if not local
+    trustServerCertificate: true
+  },
+  pool: {
+    max: 10,
+    min: 0,
+    idleTimeoutMillis: 30000
   }
 };
 
-// Store the pending promise, not just the pool
+// ⚡️ THE FIX: Store the Promise, not just the pool
 let poolPromise: Promise<ConnectionPool> | null = null;
 
 export async function getAnalyticsPool(): Promise<ConnectionPool> {
@@ -28,8 +33,8 @@ export async function getAnalyticsPool(): Promise<ConnectionPool> {
       return pool;
     })
     .catch((err) => {
-      logger.error("Database Connection Failed! ", err);
-      poolPromise = null; // Reset so we can try again
+      logger.error("❌ Database Connection Failed (AnalyticsDB): ", err);
+      poolPromise = null; // Reset so we can try again on next request
       throw err;
     });
 
