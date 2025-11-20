@@ -2,43 +2,46 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import clsx from "clsx";
-
-const links = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/reports", label: "Reports" },
-  { href: "/admin/users", label: "Admin Users" }
-];
 
 export function Sidebar() {
   const pathname = usePathname();
 
+  const navItems = [
+    { label: "Workspace", href: "/" },
+    { label: "Dashboards", href: "/dashboard" },
+    // { label: "Reports", href: "/reports" }, // Add back if using reports
+  ];
+
   return (
-    <aside className="flex h-full w-60 flex-col border-r border-slate-800 bg-slate-950/90">
-      <div className="px-4 py-4 text-lg font-semibold text-brand">
-        AI Capacity Analytics
+    <aside className="hidden w-64 flex-col border-r border-slate-800 bg-slate-950 md:flex">
+      <div className="flex h-14 items-center border-b border-slate-800 px-6">
+        <div className="flex items-center gap-2 font-bold text-slate-100">
+          <div className="h-6 w-6 rounded-full bg-brand" />
+          <span>AI Analytics</span>
+        </div>
       </div>
-      <nav className="flex-1 space-y-1 px-2">
-        {links.map((link) => {
-          const active = pathname.startsWith(link.href);
+      <nav className="flex-1 space-y-1 p-4">
+        {navItems.map((item) => {
+          const isActive = pathname === item.href;
           return (
             <Link
-              key={link.href}
-              href={link.href}
-              className={clsx(
-                "block rounded-md px-3 py-2 text-sm font-medium",
-                active
-                  ? "bg-slate-800 text-brand"
-                  : "text-slate-300 hover:bg-slate-900 hover:text-white"
-              )}
+              key={item.href}
+              href={item.href}
+              className={`flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                isActive
+                  ? "bg-brand/10 text-brand"
+                  : "text-slate-400 hover:bg-slate-900 hover:text-slate-200"
+              }`}
             >
-              {link.label}
+              {item.label}
             </Link>
           );
         })}
       </nav>
-      <div className="px-4 py-3 text-xs text-slate-500">
-        CoreBackend: {process.env.NEXT_PUBLIC_CORE_BACKEND_URL ?? "http://localhost:4000"}
+      <div className="border-t border-slate-800 p-4">
+        <div className="text-xs text-slate-600">
+          v1.0.0 &bull; Connected to AnalyticsDB
+        </div>
       </div>
     </aside>
   );
