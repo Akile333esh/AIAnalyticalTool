@@ -19,19 +19,11 @@ export interface JobEvent {
   error?: string;
 }
 
-export interface Report {
-  Id: number;
-  Name: string;
-  Description?: string;
-  FolderId?: number | null;
-  CreatedAt?: string;
-}
-
 export interface DashboardWidget {
-  id: string;
+  id: string; // Now corresponds to SavedWidgets.Id (as string)
   title: string;
-  type: "kpi" | "timeseries" | "table" | "bar";
-  queryKey?: string;
+  type: "kpi" | "timeseries" | "table" | "bar" | "chart";
+  colSpan?: number; // 1, 2, or 3
 }
 
 export interface DashboardLayout {
